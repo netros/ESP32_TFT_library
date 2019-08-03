@@ -7,5 +7,7 @@ PROJECT_NAME := tft_demo
 
 EXTRA_CFLAGS += --save-temps
 
+CFLAGS += -Wno-error=tautological-compare -Wno-implicit-fallthrough -Wno-implicit-function-declaration
+
 include $(IDF_PATH)/make/project.mk
 

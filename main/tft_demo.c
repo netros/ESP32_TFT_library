@@ -34,7 +34,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include "lwip/err.h"
-#include "apps/sntp/sntp.h"
+#include "lwip/apps/sntp.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 
@@ -1096,6 +1096,7 @@ void tft_demo() {
 		disp_header("Welcome to ESP32");
 
 		test_times();
+		//HK disp_images();
 		font_demo();
 		line_demo();
 		aline_demo();

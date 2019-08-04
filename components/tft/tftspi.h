@@ -47,7 +47,7 @@
 #define DISP_COLOR_BITS_24          0x66
 #define DEFAULT_GAMMA_CURVE         0
 //HK #define DEFAULT_SPI_CLOCK      20000000
-#define DEFAULT_SPI_CLOCK           26000000
+#define DEFAULT_SPI_CLOCK           32000000
 #define TFT_INVERT_ROTATION         0
 #define TFT_INVERT_ROTATION1        0
 #define TFT_RGB_BGR                 0x08

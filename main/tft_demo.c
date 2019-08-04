@@ -1096,19 +1096,19 @@ void tft_demo() {
 		disp_header("Welcome to ESP32");
 
 		test_times();
-		//HK disp_images();
-		font_demo();
-		line_demo();
-		aline_demo();
-		rect_demo();
-		circle_demo();
-		ellipse_demo();
-		arc_demo();
-		triangle_demo();
-		poly_demo();
-		pixel_demo();
 		disp_images();
-		touch_demo();
+		font_demo();
+		//line_demo();
+		//aline_demo();
+		//rect_demo();
+		//circle_demo();
+		//ellipse_demo();
+		//arc_demo();
+		//triangle_demo();
+		//poly_demo();
+		//pixel_demo();
+		//disp_images();
+		//touch_demo();
 
 		_demo_pass++;
 	}
@@ -1410,13 +1410,14 @@ void app_main()
     ESP_ERROR_CHECK( nvs_flash_init() );
 
     // ===== Set time zone ======
-	setenv("TZ", "CET-1CEST", 0);
+	setenv("TZ", "KST-9", 1);
+	//setenv("TZ", "CET-1CEST", 0);
 	tzset();
 	// ==========================
 
 	disp_header("GET NTP TIME");
 
-    time(&time_now);
+    	time(&time_now);
 	tm_info = localtime(&time_now);
 
 	// Is time set? If not, tm_year will be (1970 - 1900).

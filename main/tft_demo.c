@@ -428,6 +428,7 @@ static void font_demo()
 	int x, y, n;
 	uint32_t end_time;
 
+/* HKCHUNG
 	disp_header("FONT DEMO");
 
 	end_time = clock() + GDEMO_TIME;
@@ -437,7 +438,7 @@ static void font_demo()
 		for (int f=DEFAULT_FONT; f<FONT_7SEG; f++) {
 			_fg = random_color();
 			TFT_setFont(f, NULL);
-			TFT_print("Welcome to ESP32", 4, y);
+			TFT_print("HKCHUNG", 4, y);
 			y += TFT_getfontheight() + 4;
 			n++;
 		}
@@ -497,6 +498,8 @@ static void font_demo()
 	update_header(NULL, tmp_buff);
 	Wait(-GDEMO_INFO_TIME);
 
+*/
+
 	disp_header("7-SEG FONT DEMO");
 
 	int ms = 0;
@@ -504,7 +507,8 @@ static void font_demo()
 	uint32_t ctime = clock();
 	end_time = clock() + GDEMO_TIME*2;
 	n = 0;
-	while ((clock() < end_time) && (Wait(0))) {
+	//while ((clock() < end_time) && (Wait(0))) {
+	while (1) {
 		y = 12;
 		ms = clock() - ctime;
 		time(&time_now);
@@ -516,14 +520,21 @@ static void font_demo()
 		}
 
 		_fg = TFT_ORANGE;
-		sprintf(tmp_buff, "%02d:%02d:%03d", tm_info->tm_min, tm_info->tm_sec, ms);
-		TFT_setFont(FONT_7SEG, NULL);
-        if ((_width < 240) || (_height < 240)) set_7seg_font_atrib(8, 1, 1, TFT_DARKGREY);
-		else set_7seg_font_atrib(12, 2, 1, TFT_DARKGREY);
+		//HK sprintf(tmp_buff, "%02d:%02d:%03d", tm_info->tm_min, tm_info->tm_sec, ms);
+		sprintf(tmp_buff, "%02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+
+		//HK TFT_setFont(FONT_7SEG, NULL);
+		TFT_setFont(2, NULL);
+
+        if ((_width < 240) || (_height < 240)) 
+			set_7seg_font_atrib(24, 1, 1, TFT_DARKGREY);
+		else 
+			set_7seg_font_atrib(12, 2, 1, TFT_GREEN);
 		//TFT_clearStringRect(12, y, tmp_buff);
 		TFT_print(tmp_buff, CENTER, y);
 		n++;
 
+/* HKCHUNG
 		_fg = TFT_GREEN;
 		y += TFT_getfontheight() + 12;
 		if ((_width < 240) || (_height < 240)) set_7seg_font_atrib(9, 1, 1, TFT_DARKGREY);
@@ -540,11 +551,14 @@ static void font_demo()
 		//TFT_clearStringRect(12, y, tmp_buff);
 		TFT_print(tmp_buff, CENTER, y);
 		n++;
+
+*/
 	}
 	sprintf(tmp_buff, "%d STRINGS", n);
 	update_header(NULL, tmp_buff);
 	Wait(-GDEMO_INFO_TIME);
 
+/*  HKCHUNG 
 	disp_header("WINDOW DEMO");
 
 	TFT_saveClipWin();
@@ -568,6 +582,7 @@ static void font_demo()
 	Wait(-GDEMO_INFO_TIME);
 
 	TFT_restoreClipWin();
+*/ 
 }
 
 //---------------------

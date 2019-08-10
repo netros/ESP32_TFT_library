@@ -271,7 +271,7 @@ static void _dispTime()
     time(&time_now);
 	time_last = time_now;
 	tm_info = localtime(&time_now);
-	sprintf(tmp_buff, "%02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+	sprintf(tmp_buff, "HK %02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
 	TFT_print(tmp_buff, CENTER, _height-TFT_getfontheight()-5);
 
     cfont = curr_font;
@@ -295,7 +295,7 @@ static void disp_header(char *info)
 	TFT_drawRect(0, _height-TFT_getfontheight()-9, _width-1, TFT_getfontheight()+8, TFT_CYAN);
 
 	TFT_print(info, CENTER, 4);
-	_dispTime();
+	 _dispTime();
 
 	_bg = TFT_BLACK;
 	TFT_setclipwin(0,TFT_getfontheight()+9, _width-1, _height-TFT_getfontheight()-10);
@@ -476,7 +476,6 @@ static void font_demo()
 		}
 		text_wrap = 0;
 	}
-
 	disp_header("ROTATED FONT DEMO");
 
 	end_time = clock() + GDEMO_TIME;
@@ -500,23 +499,26 @@ static void font_demo()
 
 */
 
-	disp_header("7-SEG FONT DEMO");
+	//HK disp_header("7-SEG FONT DEMO");
+	disp_header("CLOCK DEMO");
 
-	int ms = 0;
+	//int ms = 0;
 	int last_sec = 0;
-	uint32_t ctime = clock();
+	//HK uint32_t ctime = clock();
 	end_time = clock() + GDEMO_TIME*2;
 	n = 0;
-	//while ((clock() < end_time) && (Wait(0))) {
+	////HK while ((clock() < end_time) && (Wait(0))) {
+	//HK ADD
+    		ESP_LOGI(tag, "HKHK width: %d height: %d", _width, _height);
 	while (1) {
 		y = 12;
-		ms = clock() - ctime;
+		//HK ms = clock() - ctime;
 		time(&time_now);
 		tm_info = localtime(&time_now);
 		if (tm_info->tm_sec != last_sec) {
 			last_sec = tm_info->tm_sec;
-			ms = 0;
-			ctime = clock();
+		//HK ms = 0;
+		//HK ctime = clock();
 		}
 
 		_fg = TFT_ORANGE;
@@ -526,13 +528,14 @@ static void font_demo()
 		//HK TFT_setFont(FONT_7SEG, NULL);
 		TFT_setFont(2, NULL);
 
-        if ((_width < 240) || (_height < 240)) 
+	        if ((_width < 240) || (_height < 240)) 
 			set_7seg_font_atrib(24, 1, 1, TFT_DARKGREY);
 		else 
 			set_7seg_font_atrib(12, 2, 1, TFT_GREEN);
 		//TFT_clearStringRect(12, y, tmp_buff);
 		TFT_print(tmp_buff, CENTER, y);
-		n++;
+		//HK n++;
+	
 
 /* HKCHUNG
 		_fg = TFT_GREEN;
@@ -1055,7 +1058,8 @@ void tft_demo() {
             sprintf(dtype, "Unknown");
     }
     
-    uint8_t disp_rot = PORTRAIT;
+    //HK uint8_t disp_rot = PORTRAIT;
+    uint8_t disp_rot = LANDSCAPE;
 	_demo_pass = 0;
 	gray_scale = 0;
 	doprint = 1;
@@ -1425,8 +1429,8 @@ void app_main()
     ESP_ERROR_CHECK( nvs_flash_init() );
 
     // ===== Set time zone ======
+	//HK setenv("TZ", "CET-1CEST", 0);
 	setenv("TZ", "KST-9", 1);
-	//setenv("TZ", "CET-1CEST", 0);
 	tzset();
 	// ==========================
 

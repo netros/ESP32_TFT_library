@@ -23,7 +23,6 @@
 #include "tft.h"
 #include "spiffs_vfs.h"
 
-#ifdef CONFIG_EXAMPLE_USE_WIFI
 
 #include "esp_wifi.h"
 #include "esp_system.h"
@@ -38,7 +37,22 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
-#endif
+// HK
+
+#include "esp_types.h"
+#include "freertos/queue.h"
+#include "driver/periph_ctrl.h"
+#include "driver/timer.h"
+
+#define TIMER_DIVIDER         16  //  Hardware timer clock divider
+#define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds
+#define TIMER_INTERVAL0_SEC   (3.4179) // sample test interval for the first timer
+#define TIMER_INTERVAL1_SEC   (1.00)   // sample test interval for the second timer
+#define TEST_WITHOUT_RELOAD   0        // testing will be done without auto reload
+#define TEST_WITH_RELOAD      1        // testing will be done with auto reload
+
+//HK END
+
 
 
 // ==========================================================
@@ -47,13 +61,17 @@
 // ==========================================================
 
 
+static void angle_face_HK();
 static int _demo_pass = 0;
 static uint8_t doprint = 1;
-static uint8_t run_gs_demo = 0; // Run gray scale demo if set to 1
 static struct tm* tm_info;
 static char tmp_buff[64];
 static time_t time_now, time_last = 0;
 static const char *file_fonts[3] = {"/spiffs/fonts/DotMatrix_M.fon", "/spiffs/fonts/Ubuntu.fon", "/spiffs/fonts/Grotesk24x48.fon"};
+
+//HK
+TaskHandle_t Task1;
+TaskHandle_t Task2;
 
 #define GDEMO_TIME 1000
 #define GDEMO_INFO_TIME 5000
@@ -271,7 +289,8 @@ static void _dispTime()
     time(&time_now);
 	time_last = time_now;
 	tm_info = localtime(&time_now);
-	sprintf(tmp_buff, "HK %02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+	sprintf(tmp_buff, "Seoul Time: %02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+	// printf("HK:::::: %02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
 	TFT_print(tmp_buff, CENTER, _height-TFT_getfontheight()-5);
 
     cfont = curr_font;
@@ -335,50 +354,8 @@ static void update_header(char *hdr, char *ftr)
 	TFT_restoreClipWin();
 }
 
+
 //------------------------
-static void test_times() {
-
-	if (doprint) {
-	    uint32_t tstart, t1, t2;
-		disp_header("TIMINGS");
-		// ** Show Fill screen and send_line timings
-		tstart = clock();
-		TFT_fillWindow(TFT_BLACK);
-		t1 = clock() - tstart;
-		printf("     Clear screen time: %u ms\r\n", t1);
-		TFT_setFont(SMALL_FONT, NULL);
-		sprintf(tmp_buff, "Clear screen: %u ms", t1);
-		TFT_print(tmp_buff, 0, 140);
-
-		color_t *color_line = heap_caps_malloc((_width*3), MALLOC_CAP_DMA);
-		color_t *gsline = NULL;
-		if (gray_scale) gsline = malloc(_width*3);
-		if (color_line) {
-			float hue_inc = (float)((10.0 / (float)(_height-1) * 360.0));
-			for (int x=0; x<_width; x++) {
-				color_line[x] = HSBtoRGB(hue_inc, 1.0, (float)x / (float)_width);
-				if (gsline) gsline[x] = color_line[x];
-			}
-			disp_select();
-			tstart = clock();
-			for (int n=0; n<1000; n++) {
-				if (gsline) memcpy(color_line, gsline, _width*3);
-				send_data(0, 40+(n&63), dispWin.x2-dispWin.x1, 40+(n&63), (uint32_t)(dispWin.x2-dispWin.x1+1), color_line);
-				wait_trans_finish(1);
-			}
-			t2 = clock() - tstart;
-			disp_deselect();
-
-			printf("Send color buffer time: %u us (%d pixels)\r\n", t2, dispWin.x2-dispWin.x1+1);
-			free(color_line);
-
-			sprintf(tmp_buff, "   Send line: %u us", t2);
-			TFT_print(tmp_buff, 0, 144+TFT_getfontheight());
-		}
-		Wait(GDEMO_INFO_TIME);
-    }
-}
-
 // Image demo
 //-------------------------
 static void disp_images() {
@@ -422,84 +399,35 @@ static void disp_images() {
 	else if (doprint) printf("  No file system found.\r\n");
 }
 
+static void update_face()
+{
+//HKHK
+
+	int x, y, n;
+
+
+		y = 12;
+		
+        time(&time_now);
+		tm_info = localtime(&time_now);
+
+		_fg = TFT_ORANGE;
+		sprintf(tmp_buff, "%02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+
+		TFT_setFont(2, NULL);
+		
+        TFT_print(tmp_buff, CENTER, y);
+
+        angle_face_HK();
+	
+}
+
 //---------------------
 static void font_demo()
 {
 	int x, y, n;
 	uint32_t end_time;
 
-/* HKCHUNG
-	disp_header("FONT DEMO");
-
-	end_time = clock() + GDEMO_TIME;
-	n = 0;
-	while ((clock() < end_time) && (Wait(0))) {
-		y = 4;
-		for (int f=DEFAULT_FONT; f<FONT_7SEG; f++) {
-			_fg = random_color();
-			TFT_setFont(f, NULL);
-			TFT_print("HKCHUNG", 4, y);
-			y += TFT_getfontheight() + 4;
-			n++;
-		}
-	}
-	sprintf(tmp_buff, "%d STRINGS", n);
-	update_header(NULL, tmp_buff);
-	Wait(-GDEMO_INFO_TIME);
-
-	if (spiffs_is_mounted) {
-		disp_header("FONT FROM FILE DEMO");
-
-		text_wrap = 1;
-		for (int f=0; f<3; f++) {
-			TFT_fillWindow(TFT_BLACK);
-			update_header(NULL, "");
-
-			TFT_setFont(USER_FONT, file_fonts[f]);
-			if (f == 0) font_line_space = 4;
-			end_time = clock() + GDEMO_TIME;
-			n = 0;
-			while ((clock() < end_time) && (Wait(0))) {
-				_fg = random_color();
-				TFT_print("Welcome to ESP32\nThis is user font.", 0, 8);
-				n++;
-			}
-			if ((_width < 240) || (_height < 240)) TFT_setFont(DEF_SMALL_FONT, NULL);
-            else TFT_setFont(DEFAULT_FONT, NULL);
-			_fg = TFT_YELLOW;
-			TFT_print((char *)file_fonts[f], 0, (dispWin.y2-dispWin.y1)-TFT_getfontheight()-4);
-
-            font_line_space = 0;
-			sprintf(tmp_buff, "%d STRINGS", n);
-			update_header(NULL, tmp_buff);
-			Wait(-GDEMO_INFO_TIME);
-		}
-		text_wrap = 0;
-	}
-	disp_header("ROTATED FONT DEMO");
-
-	end_time = clock() + GDEMO_TIME;
-	n = 0;
-	while ((clock() < end_time) && (Wait(0))) {
-		for (int f=DEFAULT_FONT; f<FONT_7SEG; f++) {
-			_fg = random_color();
-			TFT_setFont(f, NULL);
-			x = rand_interval(8, dispWin.x2-8);
-			y = rand_interval(0, (dispWin.y2-dispWin.y1)-TFT_getfontheight()-2);
-			font_rotate = rand_interval(0, 359);
-
-			TFT_print("Welcome to ESP32", x, y);
-			n++;
-		}
-	}
-	font_rotate = 0;
-	sprintf(tmp_buff, "%d STRINGS", n);
-	update_header(NULL, tmp_buff);
-	Wait(-GDEMO_INFO_TIME);
-
-*/
-
-	//HK disp_header("7-SEG FONT DEMO");
 	disp_header("CLOCK DEMO");
 
 	//int ms = 0;
@@ -528,7 +456,7 @@ static void font_demo()
 		//HK TFT_setFont(FONT_7SEG, NULL);
 		TFT_setFont(2, NULL);
 
-	        if ((_width < 240) || (_height < 240)) 
+	    if ((_width < 240) || (_height < 240)) 
 			set_7seg_font_atrib(24, 1, 1, TFT_DARKGREY);
 		else 
 			set_7seg_font_atrib(12, 2, 1, TFT_GREEN);
@@ -537,55 +465,11 @@ static void font_demo()
 		//HK n++;
 	
 
-/* HKCHUNG
-		_fg = TFT_GREEN;
-		y += TFT_getfontheight() + 12;
-		if ((_width < 240) || (_height < 240)) set_7seg_font_atrib(9, 1, 1, TFT_DARKGREY);
-        else set_7seg_font_atrib(14, 3, 1, TFT_DARKGREY);
-		sprintf(tmp_buff, "%02d:%02d", tm_info->tm_sec, ms / 10);
-		//TFT_clearStringRect(12, y, tmp_buff);
-		TFT_print(tmp_buff, CENTER, y);
-		n++;
-
-		_fg = random_color();
-		y += TFT_getfontheight() + 8;
-		set_7seg_font_atrib(6, 1, 1, TFT_DARKGREY);
-		getFontCharacters((uint8_t *)tmp_buff);
-		//TFT_clearStringRect(12, y, tmp_buff);
-		TFT_print(tmp_buff, CENTER, y);
-		n++;
-
-*/
 	}
 	sprintf(tmp_buff, "%d STRINGS", n);
 	update_header(NULL, tmp_buff);
 	Wait(-GDEMO_INFO_TIME);
 
-/*  HKCHUNG 
-	disp_header("WINDOW DEMO");
-
-	TFT_saveClipWin();
-	TFT_resetclipwin();
-	TFT_drawRect(38, 48, (_width*3/4) - 36, (_height*3/4) - 46, TFT_WHITE);
-	TFT_setclipwin(40, 50, _width*3/4, _height*3/4);
-
-	if ((_width < 240) || (_height < 240)) TFT_setFont(DEF_SMALL_FONT, NULL);
-    else TFT_setFont(UBUNTU16_FONT, NULL);
-	text_wrap = 1;
-	end_time = clock() + GDEMO_TIME;
-	n = 0;
-	while ((clock() < end_time) && (Wait(0))) {
-		_fg = random_color();
-		TFT_print("This text is printed inside the window.\nLong line can be wrapped to the next line.\nWelcome to ESP32", 0, 0);
-		n++;
-	}
-	text_wrap = 0;
-	sprintf(tmp_buff, "%d STRINGS", n);
-	update_header(NULL, tmp_buff);
-	Wait(-GDEMO_INFO_TIME);
-
-	TFT_restoreClipWin();
-*/ 
 }
 
 //---------------------
@@ -705,6 +589,33 @@ static void aline_demo()
 	sprintf(tmp_buff, "%d LINES", n);
 	update_header(NULL, tmp_buff);
 	Wait(-GDEMO_INFO_TIME);
+}
+
+static void angle_face_HK()
+{
+	int x, y, len, hour, min, sec;
+
+	x = (dispWin.x2 - dispWin.x1) / 2;
+	y = (dispWin.y2 - dispWin.y1) / 2;
+	if (x < y) len = x - 8;
+	else len = y -8;
+
+    hour = (tm_info->tm_hour);
+    min = (tm_info->tm_min);
+    sec = (tm_info->tm_sec);
+
+
+    
+    
+    TFT_drawLineByAngle(x,y, 0, len/4, (hour-1)*15, TFT_BLACK);
+    TFT_drawLineByAngle(x,y, 0, len/4, hour*15, TFT_CYAN);
+    
+    TFT_drawLineByAngle(x,y, 0, len/2, (min-1)*6, TFT_BLACK);
+    TFT_drawLineByAngle(x,y, 0, len/2, min*6, TFT_YELLOW);
+    
+    TFT_drawLineByAngle(x,y, 0, len, (sec-1)*6, TFT_BLACK);
+    TFT_drawLineByAngle(x,y, 0, len, sec*6, TFT_RED);
+
 }
 
 //--------------------
@@ -1021,9 +932,21 @@ static void touch_demo()
 #endif
 }
 
+void tft_demo_task(void *pvParameters) {
+
+
+    printf("Task1 running on core %d", xPortGetCoreID());
+    for (;;)    {
+
+		font_demo();
+
+    }
+
+
+}
 
 //===============
-void tft_demo() {
+void tft_demo_init() {
 
 	font_rotate = 0;
 	text_wrap = 0;
@@ -1081,189 +1004,134 @@ void tft_demo() {
 
 	Wait(4000);
 
-	while (1) {
-		if (run_gs_demo) {
-			if (_demo_pass == 8) doprint = 0;
-			// Change gray scale mode on every 2nd pass
-			gray_scale = _demo_pass & 1;
-			// change display rotation
-			if ((_demo_pass % 2) == 0) {
-				_bg = TFT_BLACK;
-				TFT_setRotation(disp_rot);
-				disp_rot++;
-				disp_rot &= 3;
-			}
-		}
-		else {
-			if (_demo_pass == 4) doprint = 0;
-			// change display rotation
-			_bg = TFT_BLACK;
-			TFT_setRotation(disp_rot);
-			disp_rot++;
-			disp_rot &= 3;
-		}
-
-		if (doprint) {
-			if (disp_rot == 1) sprintf(tmp_buff, "PORTRAIT");
-			if (disp_rot == 2) sprintf(tmp_buff, "LANDSCAPE");
-			if (disp_rot == 3) sprintf(tmp_buff, "PORTRAIT FLIP");
-			if (disp_rot == 0) sprintf(tmp_buff, "LANDSCAPE FLIP");
-			printf("\r\n==========================================\r\nDisplay: %s: %s %d,%d %s\r\n\r\n",
-					dtype, tmp_buff, _width, _height, ((gray_scale) ? "Gray" : "Color"));
-		}
-
+		_bg = TFT_BLACK;
+		TFT_setRotation(LANDSCAPE);
 		disp_header("Welcome to ESP32");
 
-		//test_times();
-		//disp_images();
-		font_demo();
-		//line_demo();
-		//aline_demo();
-		//rect_demo();
-		//circle_demo();
-		//ellipse_demo();
-		//arc_demo();
-		//triangle_demo();
-		//poly_demo();
-		//pixel_demo();
-		//disp_images();
-		//touch_demo();
 
-		_demo_pass++;
-	}
 }
 
-/*
-// ================== TEST SD CARD ==========================================
+typedef struct {
+    int type;  // the type of timer's event
+    int timer_group;
+    int timer_idx;
+    uint64_t timer_counter_value;
+} timer_event_t;
 
-#include "esp_vfs_fat.h"
-#include "driver/sdmmc_host.h"
-#include "driver/sdspi_host.h"
-#include "sdmmc_cmd.h"
+xQueueHandle timer_queue;
 
-// This example can use SDMMC and SPI peripherals to communicate with SD card.
-// SPI mode IS USED
 
-// When testing SD and SPI modes, keep in mind that once the card has been
-// initialized in SPI mode, it can not be reinitialized in SD mode without
-// toggling power to the card.
-
-// Pin mapping when using SPI mode.
-// With this mapping, SD card can be used both in SPI and 1-line SD mode.
-// Note that a pull-up on CS line is required in SD mode.
-#define sdPIN_NUM_MISO 19
-#define sdPIN_NUM_MOSI 18
-#define sdPIN_NUM_CLK  5
-#define sdPIN_NUM_CS   14
-
-static const char *TAG = "SDCard test";
-
-void test_sd_card(void)
+static void inline print_timer_counter(uint64_t counter_value)
 {
-    printf("\n=======================================================\n");
-    printf("===== Test using SD Card in SPI mode              =====\n");
-    printf("===== SD Card uses the same gpio's as TFT display =====\n");
-    printf("=======================================================\n\n");
-    ESP_LOGI(TAG, "Initializing SD card");
-    ESP_LOGI(TAG, "Using SPI peripheral");
-
-    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-    sdspi_slot_config_t slot_config = SDSPI_SLOT_CONFIG_DEFAULT();
-    slot_config.gpio_miso = sdPIN_NUM_MISO;
-    slot_config.gpio_mosi = sdPIN_NUM_MOSI;
-    slot_config.gpio_sck  = sdPIN_NUM_CLK;
-    slot_config.gpio_cs   = sdPIN_NUM_CS;
-    // This initializes the slot without card detect (CD) and write protect (WP) signals.
-    // Modify slot_config.gpio_cd and slot_config.gpio_wp if your board has these signals.
-
-    // Options for mounting the filesystem.
-    // If format_if_mount_failed is set to true, SD card will be partitioned and
-    // formatted in case when mounting fails.
-    esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = false,
-        .max_files = 5
-    };
-
-    // Use settings defined above to initialize SD card and mount FAT filesystem.
-    // Note: esp_vfs_fat_sdmmc_mount is an all-in-one convenience function.
-    // Please check its source code and implement error recovery when developing
-    // production applications.
-    sdmmc_card_t* card;
-    esp_err_t ret = esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot_config, &mount_config, &card);
-
-    if (ret != ESP_OK) {
-        if (ret == ESP_FAIL) {
-            ESP_LOGE(TAG, "Failed to mount filesystem. "
-                "If you want the card to be formatted, set format_if_mount_failed = true.");
-        } else {
-            ESP_LOGE(TAG, "Failed to initialize the card (%d). "
-                "Make sure SD card lines have pull-up resistors in place.", ret);
-        }
-        return;
-    }
-
-    // Card has been initialized, print its properties
-    sdmmc_card_print_info(stdout, card);
-
-    // Use POSIX and C standard library functions to work with files.
-    // First create a file.
-    ESP_LOGI(TAG, "Opening file");
-    FILE* f = fopen("/sdcard/hello.txt", "w");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for writing");
-        return;
-    }
-    fprintf(f, "Hello %s!\n", card->cid.name);
-    fclose(f);
-    ESP_LOGI(TAG, "File written");
-
-    // Check if destination file exists before renaming
-    struct stat st;
-    if (stat("/sdcard/foo.txt", &st) == 0) {
-        // Delete it if it exists
-        unlink("/sdcard/foo.txt");
-    }
-
-    // Rename original file
-    ESP_LOGI(TAG, "Renaming file");
-    if (rename("/sdcard/hello.txt", "/sdcard/foo.txt") != 0) {
-        ESP_LOGE(TAG, "Rename failed");
-        return;
-    }
-
-    // Open renamed file for reading
-    ESP_LOGI(TAG, "Reading file");
-    f = fopen("/sdcard/foo.txt", "r");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for reading");
-        return;
-    }
-    char line[64];
-    fgets(line, sizeof(line), f);
-    fclose(f);
-    // strip newline
-    char* pos = strchr(line, '\n');
-    if (pos) {
-        *pos = '\0';
-    }
-    ESP_LOGI(TAG, "Read from file: '%s'", line);
-
-    // All done, unmount partition and disable SDMMC or SPI peripheral
-    esp_vfs_fat_sdmmc_unmount();
-    ESP_LOGI(TAG, "Card unmounted");
-
-    printf("===== SD Card test end ================================\n\n");
+    printf("Counter: 0x%08x%08x\n", (uint32_t) (counter_value >> 32),
+                                    (uint32_t) (counter_value));
+    printf("Time   : %.8f s\n", (double) counter_value / TIMER_SCALE);
 }
 
-// ================== TEST SD CARD ==========================================
-*/
+
+void IRAM_ATTR timer_group0_isr(void *para)
+{
+    int timer_idx = (int) para;
+
+    /* Retrieve the interrupt status and the counter value
+       from the timer that reported the interrupt */
+    uint32_t intr_status = TIMERG0.int_st_timers.val;
+    TIMERG0.hw_timer[timer_idx].update = 1;
+    uint64_t timer_counter_value =
+        ((uint64_t) TIMERG0.hw_timer[timer_idx].cnt_high) << 32
+        | TIMERG0.hw_timer[timer_idx].cnt_low;
+
+    /* Prepare basic event data
+       that will be then sent back to the main program task */
+    timer_event_t evt;
+    evt.timer_group = 0;
+    evt.timer_idx = timer_idx;
+    evt.timer_counter_value = timer_counter_value;
+
+    /* Clear the interrupt
+       and update the alarm time for the timer with without reload */
+    if ((intr_status & BIT(timer_idx)) && timer_idx == TIMER_0) {
+        evt.type = TEST_WITHOUT_RELOAD;
+        TIMERG0.int_clr_timers.t0 = 1;
+        timer_counter_value += (uint64_t) (TIMER_INTERVAL0_SEC * TIMER_SCALE);
+        TIMERG0.hw_timer[timer_idx].alarm_high = (uint32_t) (timer_counter_value >> 32);
+        TIMERG0.hw_timer[timer_idx].alarm_low = (uint32_t) timer_counter_value;
+    } else if ((intr_status & BIT(timer_idx)) && timer_idx == TIMER_1) {
+        evt.type = TEST_WITH_RELOAD;
+        TIMERG0.int_clr_timers.t1 = 1;
+    } else {
+        evt.type = -1; // not supported even type
+    }
+
+    /* After the alarm has been triggered
+      we need enable it again, so it is triggered the next time */
+    TIMERG0.hw_timer[timer_idx].config.alarm_en = TIMER_ALARM_EN;
+
+    /* Now just send the event data back to the main program task */
+    xQueueSendFromISR(timer_queue, &evt, NULL);
+}
+
+
+static void example_tg0_timer_init(int timer_idx, bool auto_reload, double timer_interval_sec)
+{
+    /* Select and initialize basic parameters of the timer */
+    timer_config_t config;
+    config.divider = TIMER_DIVIDER;
+    config.counter_dir = TIMER_COUNT_UP;
+    config.counter_en = TIMER_PAUSE;
+    config.alarm_en = TIMER_ALARM_EN;
+    config.intr_type = TIMER_INTR_LEVEL;
+    config.auto_reload = auto_reload;
+    timer_init(TIMER_GROUP_0, timer_idx, &config);
+
+    /* Timer's counter will initially start from value below.
+       Also, if auto_reload is set, this value will be automatically reload on alarm */
+    timer_set_counter_value(TIMER_GROUP_0, timer_idx, 0x00000000ULL);
+
+    /* Configure the alarm value and the interrupt on alarm. */
+    timer_set_alarm_value(TIMER_GROUP_0, timer_idx, timer_interval_sec * TIMER_SCALE);
+    timer_enable_intr(TIMER_GROUP_0, timer_idx);
+    timer_isr_register(TIMER_GROUP_0, timer_idx, timer_group0_isr,
+        (void *) timer_idx, ESP_INTR_FLAG_IRAM, NULL);
+
+    timer_start(TIMER_GROUP_0, timer_idx);
+}
+
+static void timer_example_evt_task(void *arg)
+{
+    while (1) {
+        timer_event_t evt;
+        xQueueReceive(timer_queue, &evt, portMAX_DELAY);
+
+        /* Print information that the timer reported an event */
+/* HK
+        if (evt.type == TEST_WITHOUT_RELOAD) {
+             printf("\n    Example timer without reload\n");
+        } else if (evt.type == TEST_WITH_RELOAD) {
+             printf("\n    Example timer with auto reload\n");
+        } else {
+             printf("\n    UNKNOWN EVENT TYPE\n");
+        }
+         printf("Group[%d], timer[%d] alarm event: %d\n", evt.timer_group, evt.timer_idx, evt.type);
+
+         printf("------- EVENT TIME --------\n");
+         print_timer_counter(evt.timer_counter_value);
+
+         printf("-------- TASK TIME --------\n");
+        uint64_t task_counter_value;
+         timer_get_counter_value(evt.timer_group, evt.timer_idx, &task_counter_value);
+         print_timer_counter(task_counter_value);
+HK */
+
+        update_header(NULL,"");
+        update_face();
+    }
+}
 
 
 //=============
 void app_main()
 {
-    //test_sd_card();
-    // ========  PREPARE DISPLAY INITIALIZATION  =========
 
     esp_err_t ret;
 
@@ -1319,29 +1187,6 @@ void app_main()
 		.flags=LB_SPI_DEVICE_HALFDUPLEX,        // ALWAYS SET  to HALF DUPLEX MODE!! for display spi
     };
 
-#if USE_TOUCH == TOUCH_TYPE_XPT2046
-    spi_lobo_device_handle_t tsspi = NULL;
-
-    spi_lobo_device_interface_config_t tsdevcfg={
-        .clock_speed_hz=2500000,                //Clock out at 2.5 MHz
-        .mode=0,                                //SPI mode 0
-        .spics_io_num=PIN_NUM_TCS,              //Touch CS pin
-		.spics_ext_io_num=-1,                   //Not using the external CS
-		//.command_bits=8,                        //1 byte command
-    };
-#elif USE_TOUCH == TOUCH_TYPE_STMPE610
-    spi_lobo_device_handle_t tsspi = NULL;
-
-    spi_lobo_device_interface_config_t tsdevcfg={
-        .clock_speed_hz=1000000,                //Clock out at 1 MHz
-        .mode=STMPE610_SPI_MODE,                //SPI mode 0
-        .spics_io_num=PIN_NUM_TCS,              //Touch CS pin
-		.spics_ext_io_num=-1,                   //Not using the external CS
-        .flags = 0,
-    };
-#endif
-
-    // ====================================================================================================================
 
 
     vTaskDelay(500 / portTICK_RATE_MS);
@@ -1349,10 +1194,6 @@ void app_main()
     printf("TFT display DEMO, LoBo 11/2017\r\n");
 	printf("==============================\r\n");
     printf("Pins used: miso=%d, mosi=%d, sck=%d, cs=%d\r\n", PIN_NUM_MISO, PIN_NUM_MOSI, PIN_NUM_CLK, PIN_NUM_CS);
-#if USE_TOUCH > TOUCH_TYPE_NONE
-    printf(" Touch CS: %d\r\n", PIN_NUM_TCS);
-#endif
-	printf("==============================\r\n\r\n");
 
 	// ==================================================================
 	// ==== Initialize the SPI bus and attach the LCD to the SPI bus ====
@@ -1371,23 +1212,6 @@ void app_main()
 	printf("SPI: attached display device, speed=%u\r\n", spi_lobo_get_speed(spi));
 	printf("SPI: bus uses native pins: %s\r\n", spi_lobo_uses_native_pins(spi) ? "true" : "false");
 
-#if USE_TOUCH > TOUCH_TYPE_NONE
-	// =====================================================
-    // ==== Attach the touch screen to the same SPI bus ====
-
-	ret=spi_lobo_bus_add_device(SPI_BUS, &buscfg, &tsdevcfg, &tsspi);
-    assert(ret==ESP_OK);
-	printf("SPI: touch screen device added to spi bus (%d)\r\n", SPI_BUS);
-	ts_spi = tsspi;
-
-	// ==== Test select/deselect ====
-	ret = spi_lobo_device_select(tsspi, 1);
-    assert(ret==ESP_OK);
-	ret = spi_lobo_device_deselect(tsspi);
-    assert(ret==ESP_OK);
-
-	printf("SPI: attached TS device, speed=%u\r\n", spi_lobo_get_speed(tsspi));
-#endif
 
 	// ================================
 	// ==== Initialize the Display ====
@@ -1481,5 +1305,27 @@ void app_main()
 	//=========
     // Run demo
     //=========
-	tft_demo();
+    
+    tft_demo_init();
+
+/*
+     xTaskCreatePinnedToCore(tft_demo_task, // task function
+                            "tft demo", // name of task
+                            2048, // stack size of task
+                            NULL, // parameter of the task 
+                            5,  // priority
+                            &Task1, // Task Handle to kepp track of created task
+                            0); // pin task to core 0
+    
+*/
+    timer_queue = xQueueCreate(10, sizeof(timer_event_t)); 
+    example_tg0_timer_init(TIMER_1, TEST_WITH_RELOAD, TIMER_INTERVAL1_SEC);
+    
+    xTaskCreatePinnedToCore(timer_example_evt_task, // task function
+                            "timer demo", // name of task
+                            2048, // stack size of task
+                            NULL, // parameter of the task 
+                            6,  // priority
+                            &Task2, // Task Handle to kepp track of created task
+                            1); // pin task to core 0
 }
